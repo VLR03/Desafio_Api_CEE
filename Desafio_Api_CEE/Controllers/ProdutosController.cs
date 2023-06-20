@@ -2,264 +2,290 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Desafio_Api_CEE.Models;
 using Desafio_Api_CEE.Services;
+using System.Diagnostics;
 
-namespace Desafio_Api_CEE.Controllers;
-
-[Route("api/[controller]")]
-[ApiController]
-public class ProdutosController : ControllerBase
+namespace Desafio_Api_CEE.Controllers
 {
-    private readonly ProdutoServices _produtoServices;
-
-    public ProdutosController(ProdutoServices produtoServices)
+    [Route("api/[controller]")]
+    [ApiController]
+    public class ProdutosController : ControllerBase
     {
-        _produtoServices = produtoServices;
-    }
+        private readonly ProdutoServices _produtoServices;
 
-    [HttpGet]
-    public async Task<List<Produto>> GetProdutos() =>
-        await _produtoServices.GetAsync();
-
-    [HttpPost]
-    public async Task<Produto> PostProduto(Produto produto)
-    {
-        await _produtoServices.CreateAsync(produto);
-
-        return produto;
-    }
-
-    private int CalcularIdade(DateTime dataNascimento)
-    {
-        var hoje = DateTime.Today;
-        var idade = hoje.Year - dataNascimento.Year;
-        if (dataNascimento.Date > hoje.AddYears(-idade))
+        public ProdutosController(ProdutoServices produtoServices)
         {
-            idade--;
-        }
-        return idade;
-    }
-
-    private bool ValidarSenha(string senha, DateTime dataNascimento)
-    {
-        if (senha.Length != 6)
-        {
-            return false;
+            _produtoServices = produtoServices;
         }
 
-        var senhaNumerica = 0;
-        if (int.TryParse(senha, out senhaNumerica) && senhaNumerica == int.Parse(dataNascimento.ToString("yyMMdd")))
+        [HttpGet]
+        public async Task<List<Produto>> GetProdutos() =>
+            await _produtoServices.GetAsync();
+
+        private bool ValidarSenha(Produto newProduto)
         {
-            return false;
-        }
+            var dataNascimento = newProduto.DataNasc.Value;
+            var ano = dataNascimento.Year.ToString().Substring(2);
+            var mes = dataNascimento.Month.ToString().PadLeft(2, '0');
+            var dia = dataNascimento.Day.ToString().PadLeft(2, '0');
 
-        var sequenciaNumerica = "01234567890";
-        if (sequenciaNumerica.Contains(senha) || senha.Distinct().Count() <= 1)
-        {
-            return false;
-        }
+            var idade = DateTime.Today.Year - dataNascimento.Year;
+            var senha = newProduto.Senha.ToString();
+            var senhaConfirm = newProduto.SenhaConfirm.ToString();
 
-        return true;
-    }
-
-    private string GerarNumeroCartao()
-    {
-        var rnd = new Random();
-
-        var prefixo = rnd.Next(1000, 9999).ToString();
-
-        var primeirosnumerosMeio = "";
-        for (var i = 0; i < 4; i++)
-        {
-            var grupo = rnd.Next(1000, 9999);
-            primeirosnumerosMeio = grupo.ToString() + " ";
-        }
-
-        var ultimossnumerosMeio = "";
-        for (var i = 0; i < 4; i++)
-        {
-            var grupo2 = rnd.Next(1000, 9999);
-            ultimossnumerosMeio = grupo2.ToString() + " ";
-        }
-
-        var ultimosDigitos = rnd.Next(1000, 9999).ToString();
-
-        var numeroCartao = prefixo + " " + primeirosnumerosMeio + ultimossnumerosMeio + ultimosDigitos;
-        return numeroCartao;
-    }
-
-    [HttpPost("solicitar")]
-    public async Task<ActionResult<Produto>> SolicitarCartao([FromBody] Produto produto)
-    {
-        produto.Status = "SOLICITADO";
-
-        if (produto == null)
-        {
-            return BadRequest("Dados do produto não fornecidos.");
-        }
-
-        if (string.IsNullOrEmpty(produto.Agencia))
-        {
-            return BadRequest("A agência é obrigatória para solicitar o cartão.");
-        }
-
-        if (string.IsNullOrEmpty(produto.Conta))
-        {
-            return BadRequest("A conta é obrigatória para solicitar o cartão.");
-        }
-
-        if (string.IsNullOrEmpty(produto.Cpf))
-        {
-            return BadRequest("O CPF é obrigatório para solicitar o cartão.");
-        }
-
-        if (produto.DataNasc == null || CalcularIdade(produto.DataNasc.Value) < 18)
-        {
-            return BadRequest("A solicitação de cartão só pode ser feita por maiores de 18 anos.");
-        }
-
-        if (string.IsNullOrEmpty(produto.NomeCompleto))
-        {
-            return BadRequest("O nome completo é obrigatório para solicitar o cartão.");
-        }
-
-        if (string.IsNullOrEmpty(produto.NomeCartao))
-        {
-            return BadRequest("O nome para o cartão é obrigatório para solicitar o cartão.");
-        }
-
-        if (produto.Bandeira != "Mastercard" && produto.Bandeira != "Visa")
-        {
-            return BadRequest("A opção de bandeira do cartão é inválida. Escolha entre Mastercard ou Visa.");
-        }
-
-        if (produto.Tipo != "PLATINUM" && produto.Tipo != "GOLD" && produto.Tipo != "BLACK DIAMOND")
-        {
-            return BadRequest("A opção de tipo de cartão é inválida. Escolha entre PLATINUM, GOLD ou BLACK DIAMOND.");
-        }
-
-        if (produto.DataVenc != "5" && produto.DataVenc != "10" && produto.DataVenc != "15" && produto.DataVenc != "25")
-        {
-            return BadRequest("A opção de data de vencimento é inválida. Escolha entre 5, 10, 15 ou 25.");
-        }
-
-        if (string.IsNullOrEmpty(produto.Senha) || string.IsNullOrEmpty(produto.SenhaConfirm))
-        {
-            return BadRequest("A senha e a confirmação de senha são obrigatórias para solicitar o cartão.");
-        }
-
-        if (produto.Senha != produto.SenhaConfirm)
-        {
-            return BadRequest("A senha e a confirmação de senha não correspondem.");
-        }
-
-        if (!ValidarSenha(produto.Senha, produto.DataNasc.Value))
-        {
-            return BadRequest("A senha deve ter 6 dígitos que não correspondam à data de nascimento do cliente, sem números repetidos ou sequenciais.");
-        }
-
-        produto.Status = "ENTREGUE";
-        produto.NumeroCartao = GerarNumeroCartao();
-
-        try
-        {
-            await _produtoServices.CreateAsync(produto);
-
-            return Ok(new
+            if (idade >= 18 && senha.Length == 6 && senha != (ano + mes + dia) && int.TryParse(senha, out int senhaNumerica) && senha.Distinct().Count() == 6)
             {
-                NumeroCartao = produto.NumeroCartao,
-                NomeImpresso = produto.NomeCartao.ToUpper(),
-                DataVencimento = produto.DataVenc,
-                InstrucoesAtivacao = "Digite a senha previamente cadastrada para ativar o cartão."
-            });
+                bool possuiSequencia = false;
+                for (int i = 0; i < senha.Length - 1; i++)
+                {
+                    if (senha[i] + 1 == senha[i + 1])
+                    {
+                        possuiSequencia = true;
+                        break;
+                    }
+                }
+                return !possuiSequencia;
+            }
+
+            return false;
         }
-        catch (Exception ex)
+
+        private string GerarNumeroCartao()
         {
-            return StatusCode(StatusCodes.Status500InternalServerError, "Ocorreu um erro ao solicitar o cartão.");
+            var rnd = new Random();
+
+            var prefixo = rnd.Next(1000, 9999).ToString();
+
+            var primeirosnumerosMeio = "";
+            for (var i = 0; i < 4; i++)
+            {
+                var grupo = rnd.Next(1000, 9999);
+                primeirosnumerosMeio = grupo.ToString() + " ";
+            }
+
+            var ultimossnumerosMeio = "";
+            for (var i = 0; i < 4; i++)
+            {
+                var grupo2 = rnd.Next(1000, 9999);
+                ultimossnumerosMeio = grupo2.ToString() + " ";
+            }
+
+            var ultimosDigitos = rnd.Next(1000, 9999).ToString();
+
+            var numeroCartao = prefixo + " " + primeirosnumerosMeio + ultimossnumerosMeio + ultimosDigitos;
+            return numeroCartao;
         }
-    }
 
-    [HttpPut("ativar")]
-    public async Task<IActionResult> AtivarCartao(string numeroCartao, string agencia, string conta, string senha)
-    {
-
-        var cartao = await _produtoServices.GetAsyncByNumeroCartao(numeroCartao);
-        if (cartao == null)
+        [HttpPost("solicitar")]
+        public async Task<ActionResult<Produto>> Solicitar([FromBody] Produto produto)
         {
-            return NotFound("O número do cartão não foi encontrado");
+            Random rnd = new Random();
+            var checarSenha = ValidarSenha(produto);
+
+            if (DateTime.Today.Year - produto.DataNasc.Value.Year < 18)
+                return BadRequest("É obrigatório ter 18 ou mais de idade para solicitar um cartão.");
+
+            if (produto.Bandeira != "Mastercard" && produto.Bandeira != "Visa")
+            {
+                return BadRequest("A bandeira do cartão deve ser: 'Mastercard' ou 'Visa'.");
+            }
+
+            if (produto.DataVenc != "5" && produto.DataVenc != "10" && produto.DataVenc != "15" && produto.DataVenc != "20")
+            {
+                return BadRequest("A Data de Vencimento deve ser: '5', '10', '15', ou '20'.");
+            }
+
+            if (produto.Tipo != "PLATINUM" && produto.Tipo != "GOLD" && produto.Tipo != "BLACK" && produto.Tipo != "DIAMOND")
+            {
+                return BadRequest("O Tipo do cartão deve ser: 'PLATINUM', 'GOLD', 'BLACK' ou 'DIAMOND'.");
+            }
+            else
+            {
+                switch (produto.Tipo)
+                {
+                    case "GOLD":
+                        produto.Limite = "R$1.500,00";
+                        break;
+                    case "PLATINUM":
+                        produto.Limite = "R$15.000,00";
+                        break;
+                    case "BLACK":
+                        produto.Limite = "R$30.000,00";
+                        break;
+                    case "DIAMOND":
+                        produto.Limite = "ILIMITADO";
+                        break;
+                }
+            }
+
+            if (!checarSenha)
+            {
+                return BadRequest("Por favor, insira uma senha de 6 dígitos que cumpra com os seguintes requisitos:" +
+                                  "\n1. Não corresponda a sua data de nascimento" +
+                                  "\n2. Não possua números repetidos" +
+                                  "\n3. Não possua números em sequencia.");
+            }
+            else
+            {
+                //produto.Status = "ENTREGUE"
+                produto.Cvv = rnd.Next(100, 1000).ToString();
+                produto.NumeroCartao = GerarNumeroCartao();
+
+                try
+                {
+                    await _produtoServices.CreateAsync(produto);
+
+                    return Ok("ID do seu Cartão: " + produto.Id + "\n" + 
+                              "Número do seu Cartão: " + produto.NumeroCartao + "\n" + 
+                              "Nome a ser impresso: " + produto.NomeCartao + "\n" + 
+                              "Data de Vencimento: " + produto.DataVenc + " anos" + "\n" + 
+                              "\nPara ativar o seu cartão, realize as seguintes tarefas:\n" +
+                              "Utilize o serviço 'Entregar' e insira os seguintes dados: " +
+                              "Id, Número do cartão, Agência, Conta e senha --> " + produto.Senha +
+                              "\nUtilize o serviço 'Ativar' e insira os seguintes dados: " +
+                              "Id, Número do cartão, Agência, Conta e Senha --> " + produto.Senha);
+                }
+                catch (Exception ex)
+                {
+                    return StatusCode(StatusCodes.Status500InternalServerError, "Ocorreu um erro ao solicitar o cartão.");
+
+                }
+            }
         }
 
-        // Verifique se os dados do cartão são válidos
-        if (cartao.Agencia != agencia || cartao.Conta != conta)
+        [HttpPut("Entregar")]
+        public async Task<IActionResult> Entregar(string id, string numeroCartao, string agencia, string conta, string senha)
         {
-            return BadRequest("Dados do cartão inválidos");
+            var cartao = await _produtoServices.GetAsync(id);
+
+            if (cartao.Conta == conta && cartao.Senha == senha &&
+                cartao.NumeroCartao == numeroCartao && cartao.Agencia == agencia)
+            {
+                cartao.Status = "ENTREGUE";
+                await _produtoServices.UpdateAsync(id, cartao);
+                return Ok("Cartão foi entregue com sucesso!");
+            }
+            else
+            {
+                return BadRequest("Cartão não encontrado. Verifique se as informações inseridas préviamente estão corretas.");
+            }
         }
 
-        // Verifique se a senha está correta
-        if (cartao.Senha != senha)
+        [HttpPut("ativar")]
+        public async Task<IActionResult> Ativar(string id, string numeroCartao, string agencia, string conta, string senha)
         {
-            return Unauthorized("Senha incorreta");
+
+            var cartao = await _produtoServices.GetAsync(id);
+
+            if (cartao.NumeroCartao.ToString() == numeroCartao && cartao.Agencia.ToString() == agencia &&
+                cartao.Conta.ToString() == conta && cartao.Senha.ToString() == senha)
+            {
+                if (cartao.Status == "ENTREGUE")
+                {
+                    cartao.Status = "ATIVO";
+                    await _produtoServices.UpdateAsync(id, cartao);
+                    return Ok("Parabéns! Seu cartão foi ativado com sucesso.");
+                }
+                else
+                {
+                    return BadRequest("O Status do seu cartão não foi registrado como entregue. Utilize o serviço 'entregar' e em seguida ative seu cartão.");
+                }
+
+            }
+            else
+            {
+                return BadRequest("Não foi possível encontrar o seu cartão. Verifique se as informações inseridas préviamente estão corretas.");
+            }
         }
 
-        // Verifique o status do cartão
-        if (cartao.Status != "ENTREGUE")
+        [HttpPost("bloquear")]
+        public async Task<IActionResult> Bloquear(string id,string numeroCartao, string agencia, string conta, string senha, string motivo)
         {
-            return BadRequest("O cartão não pode ser ativado");
+            var cartao = await _produtoServices.GetAsync(id);
+
+            if(cartao.NumeroCartao == numeroCartao && cartao.Agencia.ToString() == agencia &&
+               cartao.Conta.ToString() == conta && cartao.Senha.ToString() == senha)
+            {
+                if (cartao.Status == "ATIVO")
+                {
+                    if (motivo == "Perda" || motivo == "Roubo" || motivo == "Danificado")
+                    {
+                        cartao.Status = motivo;
+                        await _produtoServices.UpdateAsync(id, cartao);
+                        return Ok("Seu cartão foi bloqueado com sucesso!");
+                    }
+                    else
+                    {
+                        return BadRequest("Justifique o motivo do bloqueio com: 'Perda', 'Roubo' ou 'Danificado'.");
+                    }
+                }
+                else
+                {
+                    return BadRequest("O bloqueio só pode ser efetuado em cartões com o status categorizados como 'ATIVO'.");
+                }
+            }
+            else
+            {
+                return BadRequest("Não foi possível encontrar o seu cartão. Verifique se as informações inseridas préviamente estão corretas.");
+            }
         }
 
-        // Realize as ações necessárias para ativar o cartão
-        // Por exemplo, atualize o status do cartão para "ATIVO"
-        cartao.Status = "ATIVO";
-        await _produtoServices.UpdateAsync(numeroCartao, cartao);
-
-        return Ok("Cartão ativado com sucesso");
-    }
-
-    [HttpPost("bloquear")]
-    public async Task<IActionResult> BloquearCartao(string numeroCartao, string agencia, string conta, string senha, string motivo)
-    {
-        // Implemente as validações e lógica para bloquear o cartão aqui
-
-        // Exemplo de código:
-        var cartao = await _produtoServices.GetAsync(numeroCartao);
-        if (cartao == null)
+        [HttpPost("cancelar")]
+        public async Task<IActionResult> Cancelar(string id, string numeroCartao, string agencia, string conta, string senha)
         {
-            return NotFound();
+            var cartao = await _produtoServices.GetAsync(id);
+
+            if (cartao.NumeroCartao == numeroCartao && cartao.Agencia == agencia &&
+                cartao.Conta == conta && cartao.Senha == senha)
+            {
+                cartao.Status = "CANCELADO";
+                await _produtoServices.UpdateAsync(id, cartao);
+                return Ok("O cancelamento do seu cartão foi efetuado com sucesso!");
+            }
+            else
+            {
+                return BadRequest("Não foi possível encontrar o seu cartão. Verifique se as informações inseridas préviamente estão corretas.");
+            }
         }
 
-        // Realize as ações necessárias para bloquear o cartão
-
-        return Ok("Cartão bloqueado com sucesso");
-    }
-
-    [HttpPost("cancelar")]
-    public async Task<IActionResult> CancelarCartao(string numeroCartao, string agencia, string conta, string senha, string motivo)
-    {
-        // Implemente as validações e lógica para cancelar o cartão aqui
-
-        // Exemplo de código:
-        var cartao = await _produtoServices.GetAsync(numeroCartao);
-        if (cartao == null)
+        [HttpGet("Consultar")]
+        public async Task<IActionResult> Consultar(string numeroCartao)
         {
-            return NotFound();
+            var cartao = await _produtoServices.GetAsyncByNumeroCartao(numeroCartao);
+
+            if(cartao is null)
+            {
+                return BadRequest("Não foi possível encontrar o seu cartão. Verifique se as informações inseridas préviamente estão corretas.");
+            }
+
+            if(cartao.Status == "BLOQUEADO")
+            {
+                return BadRequest("Seu cartão está bloqueado. Se desejar desbloqueá-lo, entre em contato com a sua agência.");
+            }
+
+            if(cartao.Status == "CANCELADO")
+            {
+                return BadRequest("Seu cartão foi cancelado. Se você acredita que essa informação está errada, entre em contato com a sua agência.");
+            }
+            else
+            {
+                return Ok("Número do cartão: " + cartao.NumeroCartao + ".\nNome: " + cartao.NomeCartao + "\nLimite: " + cartao.Limite +
+                          "\nCVV: " + cartao.Cvv + "\nStatus: " + cartao.Status + "\nData de Vencimento: " + cartao.DataVenc);
+            }
         }
 
-        // Realize as ações necessárias para cancelar o cartão
-
-        return Ok("Cartão cancelado com sucesso");
-    }
-
-    [HttpGet("{numeroCartao}")]
-    public async Task<IActionResult> ConsultarCartao(string numeroCartao)
-    {
-        // Implemente a lógica para consultar o cartão aqui
-
-        // Exemplo de código:
-        var cartao = await _produtoServices.GetAsync(numeroCartao);
-        if (cartao == null)
+        [HttpDelete("{id:length(24)}")]
+        public async Task<IActionResult> Delete(string id)
         {
-            return NotFound();
-        }
+            var cartao = await _produtoServices.GetAsync(id);
 
-        return Ok(cartao); // Ou retorne as informações relevantes do cartão
+            if (cartao is null)
+            {
+                return NotFound();
+            }
+
+            await _produtoServices.RemoveAsync(cartao.Id!);
+
+            return NoContent();
+        }
     }
 }
