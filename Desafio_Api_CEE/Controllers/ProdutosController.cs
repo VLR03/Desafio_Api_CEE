@@ -65,21 +65,25 @@ public class ProdutosController : ControllerBase
     {
         var rnd = new Random();
 
-        // Prefixo do número do cartão (6 dígitos)
-        var prefixo = rnd.Next(100000, 999999).ToString();
+        var prefixo = rnd.Next(1000, 9999).ToString();
 
-        // Números do meio do cartão (8 dígitos)
-        var numerosMeio = "";
+        var primeirosnumerosMeio = "";
         for (var i = 0; i < 4; i++)
         {
             var grupo = rnd.Next(1000, 9999);
-            numerosMeio += grupo.ToString("D4") + " ";
+            primeirosnumerosMeio = grupo.ToString() + " ";
         }
 
-        // Últimos dígitos do cartão (4 dígitos)
+        var ultimossnumerosMeio = "";
+        for (var i = 0; i < 4; i++)
+        {
+            var grupo2 = rnd.Next(1000, 9999);
+            ultimossnumerosMeio = grupo2.ToString() + " ";
+        }
+
         var ultimosDigitos = rnd.Next(1000, 9999).ToString();
 
-        var numeroCartao = prefixo + " " + numerosMeio + ultimosDigitos;
+        var numeroCartao = prefixo + " " + primeirosnumerosMeio + ultimossnumerosMeio + ultimosDigitos;
         return numeroCartao;
     }
 
@@ -154,6 +158,7 @@ public class ProdutosController : ControllerBase
         }
 
         produto.Status = "ENTREGUE";
+        produto.NumeroCartao = GerarNumeroCartao();
 
         try
         {
@@ -161,7 +166,7 @@ public class ProdutosController : ControllerBase
 
             return Ok(new
             {
-                NumeroCartao = GerarNumeroCartao(),
+                NumeroCartao = produto.NumeroCartao,
                 NomeImpresso = produto.NomeCartao.ToUpper(),
                 DataVencimento = produto.DataVenc,
                 InstrucoesAtivacao = "Digite a senha previamente cadastrada para ativar o cartão."
@@ -177,11 +182,10 @@ public class ProdutosController : ControllerBase
     public async Task<IActionResult> AtivarCartao(string numeroCartao, string agencia, string conta, string senha)
     {
 
-        // Verifique se o cartão existe
-        var cartao = await _produtoServices.GetAsync(numeroCartao);
+        var cartao = await _produtoServices.GetAsyncByNumeroCartao(numeroCartao);
         if (cartao == null)
         {
-            return NotFound("Cartão não encontrado");
+            return NotFound("O número do cartão não foi encontrado");
         }
 
         // Verifique se os dados do cartão são válidos

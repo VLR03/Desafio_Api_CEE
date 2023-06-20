@@ -34,5 +34,8 @@ namespace Desafio_Api_CEE.Services
 
         public async Task RemoveAsync(string id) =>
             await _produtoCollection.DeleteOneAsync(x => x.Id == id);
+
+        public async Task<Produto> GetAsyncByNumeroCartao(string numeroCartao) =>
+            await _produtoCollection.Find(x => x.NumeroCartao == numeroCartao).FirstOrDefaultAsync();
     }
 }

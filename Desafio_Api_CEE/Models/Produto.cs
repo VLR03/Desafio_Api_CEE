@@ -21,5 +21,7 @@ namespace Desafio_Api_CEE.Models
         public string? Senha { get; set; }
         public string? SenhaConfirm { get; set; }
         public string? Status { get; set; }
+        // [BsonElement("NumeroCartao")]
+        public string? NumeroCartao { get; set; }
     }
 }
